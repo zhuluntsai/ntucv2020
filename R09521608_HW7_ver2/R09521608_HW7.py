@@ -129,10 +129,10 @@ def thinning(img):
 
     for y in range(0, img.size[1], 1):
         for x in range(0, img.size[0], 1):
-            yokoi_txt = yokoi_connectivity_number(img)
 
             if yokoi_txt[y][x] == '1' and marked_image[y][x] == 'p':
                 img.putpixel((x, y), 0)
+                yokoi_txt = yokoi_connectivity_number(img)
 
     return img
 
