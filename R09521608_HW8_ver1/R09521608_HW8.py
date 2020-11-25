@@ -11,7 +11,7 @@
 
 from PIL import Image
 import numpy as np
-import random, math, csv, os, cv2
+import random, math, csv, os
 
 filename = 'lena.bmp'
 
@@ -26,14 +26,25 @@ kernel = np.array([
     [0, 1, 1, 1, 0]])
 kernel_center = [int(kernel.shape[0]/2), int(kernel.shape[1]/2)]
 
-def padding_img(img):
+padding_pixel = 2
 
-    new_image = cv2.copyMakeBorder(img, 2, 2, 2, 2, cv2.BORDER_REFLECT)
-    # width, height = img.size
-    # new_image = Image.new('1', (width+2, height+2))
-    # for x in range(0, width, 1):
-    #     for y in range(0, height, 1):
-    #         new_image.putpixel((x+1, y+1), img.getpixel((x, y)))
+def padding(img, padding_pixel):
+    width, height = img.size
+    new_image = Image.new('L', (width+padding_pixel*2, height+padding_pixel*2))
+    for x in range(0, width, 1):
+        for y in range(0, height, 1):
+            new_image.putpixel((x+padding_pixel, y+padding_pixel), img.getpixel((x, y)))
+
+    # padding edge
+    for y in range(padding_pixel):
+        for x in range(width):
+            new_image.putpixel((x+padding_pixel, y), img.getpixel((x, 0)))
+            new_image.putpixel((x+padding_pixel, y+height+padding_pixel), img.getpixel((x, height-1)))
+    for x in range(padding_pixel):
+        for y in range(height + padding_pixel):
+            new_image.putpixel((x, y), new_image.getpixel((padding_pixel, y)))
+            new_image.putpixel((x+width+padding_pixel, y), new_image.getpixel((width+padding_pixel-1, y)))
+ 
     return new_image
 
 def guassian_noise(img, amplitude):
@@ -62,12 +73,12 @@ def salt_and_pepper(img, probability):
                 new_image.putpixel((x, y), img.getpixel((x, y)))
     return new_image
 
-def box_filter(img, kernel_width, kernel_height):
+def box_filter(img, kernel_width, kernel_height, padding_pixel):
     new_image = Image.new('L', img.size)
-    img = padding_img(img)
+    img = padding(img, padding_pixel)
     kernel_center = [int(kernel_width/2), int(kernel_height/2)]
-    for x in range(0, width, 1):
-        for y in range(0, height, 1):
+    for x in range(padding_pixel, width+padding_pixel, 1):
+        for y in range(padding_pixel, height+padding_pixel, 1):
 
             kernel_list = []
             for i in range(kernel_width):
@@ -76,15 +87,15 @@ def box_filter(img, kernel_width, kernel_height):
                     put_pixel_y = y + j - kernel_center[1]
                     kernel_list.append(img.getpixel((put_pixel_x, put_pixel_y)))
             
-            new_image.putpixel((x-1, y-1), int(sum(kernel_list) / len(kernel_list)))
+            new_image.putpixel((x-padding_pixel, y-padding_pixel), int(sum(kernel_list) / len(kernel_list)))
     return new_image
 
-def median_filter(img, kernel_width, kernel_height):
+def median_filter(img, kernel_width, kernel_height, padding_pixel):
     new_image = Image.new('L', img.size)
-    img = padding_img(img)
+    img = padding(img, padding_pixel)
     kernel_center = [int(kernel_width/2), int(kernel_height/2)]
-    for x in range(0, width, 1):
-        for y in range(0, height, 1):
+    for x in range(padding_pixel, width+padding_pixel, 1):
+        for y in range(padding_pixel, height+padding_pixel, 1):
 
             kernel_list = []
             for i in range(kernel_width):
@@ -93,13 +104,14 @@ def median_filter(img, kernel_width, kernel_height):
                     put_pixel_y = y + j - kernel_center[1]
                     kernel_list.append(img.getpixel((put_pixel_x, put_pixel_y)))
             kernel_list.sort()
-            new_image.putpixel((x-1, y-1), kernel_list[int(len(kernel_list)/2)])
+            new_image.putpixel((x-padding_pixel, y-padding_pixel), kernel_list[int(len(kernel_list)/2)])
     return new_image
 
-def dilation(img, kernel, kernel_center):
+def dilation(img, kernel, kernel_center, padding_pixel):
     new_image = Image.new('L', img.size)
-    for x in range(0, width, 1):
-        for y in range(0, height, 1):
+    img = padding(img, padding_pixel)
+    for x in range(padding_pixel, width + padding_pixel, 1):
+        for y in range(padding_pixel, height + padding_pixel, 1):
             pixel = img.getpixel((x, y))
 
             kernel_list = []
@@ -113,14 +125,15 @@ def dilation(img, kernel, kernel_center):
                         except:
                             pass
             
-            new_image.putpixel((x, y), max(kernel_list))
+            new_image.putpixel((x - padding_pixel, y - padding_pixel), max(kernel_list))
     
     return new_image
 
-def erosion(img, kernel, kernel_center):
+def erosion(img, kernel, kernel_center, padding_pixel):
     new_image = Image.new('L', img.size)
-    for x in range(0, width, 1):
-        for y in range(0, height, 1):
+    img = padding(img, padding_pixel)
+    for x in range(padding_pixel, width + padding_pixel, 1):
+        for y in range(padding_pixel, height + padding_pixel, 1):
             
             kernel_list = []
             for i in range(0, kernel.shape[0], 1):
@@ -133,23 +146,23 @@ def erosion(img, kernel, kernel_center):
                         except:
                             pass
 
-            new_image.putpixel((x, y), min(kernel_list))                
+            new_image.putpixel((x - padding_pixel, y - padding_pixel), min(kernel_list))                
     
     return new_image
 
-def opening(img, kernel, kernel_center):
-    new_image = dilation(erosion(img, kernel, kernel_center), kernel, kernel_center)
+def opening(img, kernel, kernel_center, padding_pixel):
+    new_image = dilation(erosion(img, kernel, kernel_center, padding_pixel), kernel, kernel_center, padding_pixel)
     return new_image
 
-def closing(img, kernel, kernel_center):
-    new_image = erosion(dilation(img, kernel, kernel_center), kernel, kernel_center)
+def closing(img, kernel, kernel_center, padding_pixel):
+    new_image = erosion(dilation(img, kernel, kernel_center, padding_pixel), kernel, kernel_center, padding_pixel)
     return new_image
 
-def opening_then_closing(img, kernel, kernel_center):
-    return closing(opening(img, kernel, kernel_center), kernel, kernel_center)
+def opening_then_closing(img, kernel, kernel_center, padding_pixel):
+    return closing(opening(img, kernel, kernel_center, padding_pixel), kernel, kernel_center, padding_pixel)
 
-def closing_then_opening(img, kernel, kernel_center):
-    return opening(closing(img, kernel, kernel_center), kernel, kernel_center)
+def closing_then_opening(img, kernel, kernel_center, padding_pixel):
+    return opening(closing(img, kernel, kernel_center, padding_pixel), kernel, kernel_center, padding_pixel)
 
 def SNR(img, noise_image):
     mu_s = 0
@@ -174,28 +187,26 @@ def SNR(img, noise_image):
     snr = 20 * math.log10(math.sqrt(vs) / math.sqrt(vn))
     return snr
 
-snr_csv = open('snr.csv', 'w', newline='')
-writer = csv.writer(snr_csv)
-
-for amplitude in [10]:
+for amplitude in [10, 30]:
     guassian_noise_img = guassian_noise(img, amplitude)
     guassian_noise_img.save(f'guassian_noise_{amplitude}_{filename}')
     for kernel_size in [3, 5]:
-        box_filter(guassian_noise_img, kernel_size, kernel_size).save(f'guassian_noise_{amplitude}_box_filter_{kernel_size}x{kernel_size}_{filename}')
-        median_filter(guassian_noise_img, kernel_size, kernel_size).save(f'guassian_noise_{amplitude}_median_filter_{kernel_size}x{kernel_size}_{filename}')
-    opening_then_closing(guassian_noise_img, kernel, kernel_center).save(f'guassian_noise_{amplitude}_opening_then_closing_{filename}')
-    closing_then_opening(guassian_noise_img, kernel, kernel_center).save(f'guassian_noise_{amplitude}_closing_then_opening_{filename}')
+        box_filter(guassian_noise_img, kernel_size, kernel_size, 2).save(f'guassian_noise_{amplitude}_box_filter_{kernel_size}x{kernel_size}_{filename}')
+        median_filter(guassian_noise_img, kernel_size, kernel_size, 2).save(f'guassian_noise_{amplitude}_median_filter_{kernel_size}x{kernel_size}_{filename}')
+    opening_then_closing(guassian_noise_img, kernel, kernel_center, 2).save(f'guassian_noise_{amplitude}_opening_then_closing_{filename}')
+    closing_then_opening(guassian_noise_img, kernel, kernel_center, 2).save(f'guassian_noise_{amplitude}_closing_then_opening_{filename}')
 
+for probability in [0.1, 0.05]:
+    salt_and_pepper_img = salt_and_pepper(img, probability)
+    salt_and_pepper_img.save(f'salt_and_pepper_{probability}_{filename}')
+    for kernel_size in [3, 5]:
+        box_filter(salt_and_pepper_img, kernel_size, kernel_size, 2).save(f'salt_and_pepper_{probability}_box_filter_{kernel_size}x{kernel_size}_{filename}')
+        median_filter(salt_and_pepper_img, kernel_size, kernel_size, 2).save(f'salt_and_pepper_{probability}_median_filter_{kernel_size}x{kernel_size}_{filename}')
+    opening_then_closing(salt_and_pepper_img, kernel, kernel_center, 2).save(f'salt_and_pepper_{probability}_opening_then_closing_{filename}')
+    closing_then_opening(salt_and_pepper_img, kernel, kernel_center, 2).save(f'salt_and_pepper_{probability}_closing_then_opening_{filename}')
 
-# for probability in [0.1, 0.05]:
-#     salt_and_pepper_img = salt_and_pepper(img, probability)
-#     salt_and_pepper_img.save(f'salt_and_pepper_{probability}_{filename}')
-#     for kernel_size in [3, 5]:
-#         box_filter(salt_and_pepper_img, kernel_size, kernel_size).save(f'salt_and_pepper_{probability}_box_filter_{kernel_size}x{kernel_size}_{filename}')
-        # median_filter(salt_and_pepper_img, kernel_size, kernel_size).save(f'salt_and_pepper_{probability}_median_filter_{kernel_size}x{kernel_size}_{filename}')
-    # opening_then_closing(salt_and_pepper_img, kernel, kernel_center).save(f'salt_and_pepper_{probability}_opening_then_closing_{filename}')
-    # closing_then_opening(salt_and_pepper_img, kernel, kernel_center).save(f'salt_and_pepper_{probability}_closing_then_opening_{filename}')
-
+snr_csv = open('snr.csv', 'w', newline='')
+writer = csv.writer(snr_csv)
 for file in os.listdir():
     if file.endswith('.bmp') and file != filename:
         writer.writerow([file[:-4], SNR(img, Image.open(file))])
