@@ -26,7 +26,6 @@ kernel = np.array([
     [0, 1, 1, 1, 0]])
 kernel_center = [int(kernel.shape[0]/2), int(kernel.shape[1]/2)]
 
-padding_pixel = 2
 
 def padding(img, padding_pixel):
     width, height = img.size
